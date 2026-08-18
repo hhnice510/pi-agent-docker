@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  pi-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/hhnice510/pi-agent-docker:latest
+    container_name: pi-agent
+    restart: unless-stopped
+    ports:
+      - "${PORT:-30141}:${PORT:-30141}"
+    environment:
+      - PORT=${PORT:-30141}
+      - PI_WEB_PASSWORD=${PI_WEB_PASSWORD:-}
+      # Auto update packages on container start (true/false)
+      - AUTO_UPDATE=${AUTO_UPDATE:-false}
+      # Common LLM Provider API Keys
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      # Persist Pi agent configuration, sessions, extensions and settings (~/.pi)
+      - pi_data:/root/.pi
+      # Persist coding projects workspace
+      - ./workspace:/workspace
+
+volumes:
+  pi_data:
+    name: pi_agent_data
