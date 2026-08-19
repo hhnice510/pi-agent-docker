@@ -4,6 +4,7 @@ FROM node:22-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
+    vim \
     ripgrep \
     build-essential \
     procps \

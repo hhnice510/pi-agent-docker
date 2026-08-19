@@ -15,11 +15,14 @@ services:
       - PI_WEB_PASSWORD=${PI_WEB_PASSWORD:-}
       # Auto update packages on container start (true/false)
       - AUTO_UPDATE=${AUTO_UPDATE:-false}
-      # Common LLM Provider API Keys
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # HTTP Proxy for pi-web server-side model/API requests (optional)
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-}
+    extra_hosts:
+      # Allow containers to reach the Docker host via host.docker.internal
+      - "host.docker.internal:host-gateway"
     volumes:
       # Persist Pi agent configuration, sessions, extensions and settings (~/.pi)
       - pi_data:/root/.pi

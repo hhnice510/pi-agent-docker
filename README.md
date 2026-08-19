@@ -6,11 +6,11 @@
 
 ## 🌟 核心特性
 
-- **完整环境集成**：基于 `Node.js 22 (Debian Bookworm)` 打造，预装 `git`、`ripgrep`、`curl`、`build-essential` 等工具。
+- **完整环境集成**：基于 `Node.js 22 (Debian Bookworm)` 打造，预装 `git`、`vim`、`ripgrep`、`curl`、`build-essential` 等工具。
 - **Pi Web 端可视化支持**：内置 [agegr/pi-web](https://github.com/agegr/pi-web) 交互式 Web Dashboard，默认暴露 `30141` 端口。
 - **双控体验**：既可通过浏览器界面进行会话控制与文件预览，也可随时通过终端连接容器使用 `pi` 命令行交互。
 - **全量持久化**：
-  - `pi_data` (`/root/.pi`)：持久化保存模型配置、API 密钥、扩展技能 (Skills)、自定义 Prompt 及历史 Session 记录。
+  - `pi_data` (`/root/.pi`)：持久化保存模型配置、API 密钥、扩展技能 (Skills)、自定义 Prompt、历史 Session 记录，以及 **git 全局配置（用户名/邮箱/token）**（容器启动时自动在 `/root/.pi` 与 `/root` 间同步）。
   - `workspace` (`/workspace`)：持久化挂载您需要 Agent 协作的代码项目。
 - **GHCR CI/CD 集成**：包含 GitHub Actions 工作流，可自动构建 `amd64` 与 `arm64` 架构的镜像并推送至 GHCR。
 
@@ -99,6 +99,51 @@ docker exec -it pi-agent bash
 | `OPENAI_API_KEY` | OpenAI API Key | - |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key | - |
 | `GEMINI_API_KEY` | Google Gemini API Key | - |
+| `HTTP_PROXY` | 可选，pi-web 服务端模型/API 请求的 HTTP 代理 | 空（不走代理） |
+| `HTTPS_PROXY` | 可选，HTTPS 代理地址 | 空（不走代理） |
+| `NO_PROXY` | 可选，不走代理的地址白名单（逗号分隔） | 空 |
+
+---
+
+## 🌐 HTTP 代理配置
+
+pi-web 的服务端模型和 API 请求支持标准 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` 环境变量。
+
+**注意**：容器内 `127.0.0.1` 指向容器自身。如果代理跑在 Docker 宿主机上，请使用 `host.docker.internal`（docker-compose 已配置 `host-gateway` 映射）。
+
+### 方式一：`.env` 文件（推荐）
+
+在 `.env` 中添加：
+
+```bash
+# 代理在宿主机上（如 Clash 默认端口 7890）
+HTTP_PROXY=http://host.docker.internal:7890
+HTTPS_PROXY=http://host.docker.internal:7890
+NO_PROXY=localhost,127.0.0.1
+```
+
+然后重启容器生效：
+
+```bash
+docker compose up -d
+```
+
+### 方式二：`docker run` 传参
+
+```bash
+docker run -d \
+  --name pi-agent \
+  -p 30141:30141 \
+  -v pi_agent_data:/root/.pi \
+  -v $(pwd)/workspace:/workspace \
+  --add-host host.docker.internal:host-gateway \
+  -e HTTP_PROXY="http://host.docker.internal:7890" \
+  -e HTTPS_PROXY="http://host.docker.internal:7890" \
+  -e NO_PROXY="localhost,127.0.0.1" \
+  ghcr.io/hhnice510/pi-agent-docker:latest
+```
+
+如果代理也运行在容器内，直接用容器的 IP/服务名即可。
 
 ---
 
