@@ -95,7 +95,7 @@ if [ "$CODE_SERVER_ENABLED" = "true" ]; then
     # Write the code-server supervisor program (conditionally enabled).
     cat > /etc/supervisor/conf.d/code-server.conf <<EOF
 [program:code-server]
-command=code-server --bind-addr 0.0.0.0:%(ENV_CODE_SERVER_PORT)s --auth password --user-data-dir %(ENV_CODE_SERVER_DATA_DIR)s --extensions-dir %(ENV_CODE_SERVER_DATA_DIR)s/extensions --disable-telemetry --disable-update-check /workspace
+command=code-server --bind-addr 0.0.0.0:%(ENV_CODE_SERVER_PORT)s --auth password --user-data-dir ${CODE_SERVER_DATA_DIR} --extensions-dir ${CODE_SERVER_DATA_DIR}/extensions --disable-telemetry --disable-update-check /workspace
 environment=PASSWORD=%(ENV_PASSWORD)s
 autostart=true
 autorestart=true
