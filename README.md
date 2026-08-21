@@ -30,6 +30,8 @@
 ├── entrypoint.sh                # 容器启动入口脚本 (Supervisord 启动与环境初始化)
 ├── supervisord.conf             # Supervisord 多进程管理配置
 ├── .env.example                 # 环境变量配置模版
+├── extensions/                  # 内置 Pi Agent 扩展与插件
+│   └── code-server-manager.ts   # VS Code Web 动态启停管理插件 (Tool & Command)
 ├── .github/
 │   └── workflows/
 │       └── docker-publish.yml   # GitHub Actions 构建与推送工作流
@@ -126,8 +128,12 @@ docker exec -it pi-agent bash
 2. **扩展与配置持久化**：
    - Code-server 的设置与扩展存放在 `/root/.pi/code-server` 下，容器重建或升级后配置不丢失。
    - 也可以在 `.env` 中通过 `CODE_SERVER_EXTENSIONS` 指定在启动时自动安装扩展（例如 `ms-ceintl.vscode-language-pack-zh-hans,esbenp.prettier-vscode`）。
-3. **按需关闭**：
-   - 若只需要 Pi Web UI，设置 `CODE_SERVER_ENABLED=false` 即可禁用 code-server。
+3. **内置 Pi Agent 插件动态启停**：
+   - 本镜像内置了 `code-server-manager` 扩展，Pi Agent 支持通过 Supervisor 按需动态管理 code-server，释放系统内存。
+   - **自然语言对话控制**：直接在 Pi 对话中要求它，如 “*帮我启动 VS Code*”、“*帮我关闭 code-server 释放内存*” 或 “*查看 VS Code 运行状态*”，Pi Agent 将自动调用内置 Tool 完成操作；
+   - **快捷斜杠指令**：在 Pi 终端或对话中输入 `/codeserver [start|stop|restart|status]` 即可直接管理。
+4. **启动时默认禁用**：
+   - 若平时主要使用 Pi Web UI，可在 `.env` 中设置 `CODE_SERVER_ENABLED=false`。需要时亦可通过上述插件让 Agent 动态启动。
 
 ---
 

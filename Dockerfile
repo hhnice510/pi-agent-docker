@@ -44,9 +44,10 @@ RUN mkdir -p /root/.pi /workspace
 # Set default working directory to /workspace
 WORKDIR /workspace
 
-# Copy entrypoint and supervisord configuration (process manager for pi-web + code-server)
+# Copy entrypoint, supervisord configuration, and built-in extensions
 COPY entrypoint.sh /entrypoint.sh
 COPY supervisord.conf /etc/supervisor/supervisord.conf
+COPY extensions/ /opt/pi/extensions/
 RUN chmod +x /entrypoint.sh
 
 # Expose Web UI (30141) and code-server (8443) ports

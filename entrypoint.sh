@@ -2,9 +2,14 @@
 set -e
 
 # 1. Ensure required directories exist
-mkdir -p /root/.pi/code-server/extensions /workspace
+mkdir -p /root/.pi/agent/extensions /root/.pi/code-server/extensions /workspace
 
-# 2. Sync git global config & credentials with persistent volume
+# 2. Sync built-in Pi Agent extensions
+if [ -d "/opt/pi/extensions" ]; then
+  cp -rf /opt/pi/extensions/* /root/.pi/agent/extensions/ 2>/dev/null || true
+fi
+
+# 3. Sync git global config & credentials with persistent volume
 for file in .gitconfig .git-credentials; do
   if [ -f "/root/.pi/$file" ]; then
     cp -f "/root/.pi/$file" "/root/$file"
