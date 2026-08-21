@@ -113,11 +113,10 @@ else
     rm -f /etc/supervisor/conf.d/code-server.conf
 fi
 
-# If flags were passed on the command line (e.g. docker run ... -e ...), forward
-# them to pi-web as extra arguments.
-if [ $# -gt 0 ]; then
-    export PI_WEB_ARGS="$*"
-fi
+# Forward any command-line flags (e.g. docker run ... --some-flag) to pi-web as
+# extra arguments. PI_WEB_ARGS is always exported (empty when none are given) so the
+# supervisord config's %(ENV_PI_WEB_ARGS)s reference is never undefined at startup.
+export PI_WEB_ARGS="$*"
 
 # Hand off to supervisord (PID 1) which supervises pi-web and, when enabled,
 # code-server. Each program is independently restarted and gracefully stopped
