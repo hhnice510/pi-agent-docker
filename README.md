@@ -25,7 +25,7 @@
 ├── Dockerfile                   # Docker 镜像构建文件 (Node 22 Debian)
 ├── docker-compose.yml           # Docker Compose 本地启动与持久化挂载配置
 ├── entrypoint.sh                # 容器启动入口脚本
-├── .env.example                 # 环境变量模版 (API Key, Web端口, 密码)
+├── .env.example                 # 环境变量模版 (API Key, 密码, 代理等可选配置)
 ├── .github/
 │   └── workflows/
 │       └── docker-publish.yml   # GitHub Actions 构建并推送至 GHCR 的 Workflow
@@ -99,9 +99,9 @@ docker exec -it pi-agent bash
 
 | 变量名 | 说明 | 默认值 |
 | :--- | :--- | :--- |
-| `PORT` | Pi Web UI 服务监听端口 | `30141` |
+| `PORT` | Pi Web UI 服务监听端口（已在镜像内固定，一般无需在 `.env` 配置） | `30141` |
 | `PI_WEB_PASSWORD` | 可选，开启 Web UI 的 Basic 密码验证 | 空（无密码） |
-| `CODE_SERVER_PORT` | Code-server (VS Code Web) 监听端口 | `8443` |
+| `CODE_SERVER_PORT` | Code-server (VS Code Web) 监听端口（已在镜像内固定，一般无需在 `.env` 配置） | `8443` |
 | `CODE_SERVER_PASSWORD` | 可选，Code-server 登录密码；留空则每次启动随机生成并打印到容器日志 | 空（随机生成） |
 | `CODE_SERVER_EXTENSIONS` | 可选，容器启动时自动安装的 VS Code 扩展 ID（逗号分隔） | 空 |
 | `CODE_SERVER_ENABLED` | 是否在容器启动时运行 code-server (`true`/`false`) | `true` |
