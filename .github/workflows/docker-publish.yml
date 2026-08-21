@@ -97,8 +97,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # 不使用 GHA 层缓存：之前 cache-from/to: type=gha 复用了旧的
+          # entrypoint.sh 层，导致打出的镜像 code-server 仍绑在错误的端口。
+          # 每次全量重建，确保提交进仓库的 Dockerfile/entrypoint 被正确打进镜像。
 
       - name: Save built version cache
         if: steps.build_decision.outputs.should_build == 'true' && github.event_name != 'pull_request'
