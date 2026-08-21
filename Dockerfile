@@ -35,8 +35,6 @@ RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent @agegr/pi-we
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PORT=30141
-ENV CODE_SERVER_PORT=8443
 
 # Create persistence and workspace directories
 RUN mkdir -p /root/.pi /workspace

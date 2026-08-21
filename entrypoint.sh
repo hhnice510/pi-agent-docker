@@ -43,15 +43,6 @@ fi
 # so they survive container recreation, just like the rest of the Pi agent config.
 #
 CODE_SERVER_ENABLED="${CODE_SERVER_ENABLED:-true}"
-CODE_SERVER_PORT="${CODE_SERVER_PORT:-8443}"
-# Guard: code-server must not share pi-web's port, otherwise it fails to bind
-# (EADDRINUSE) on startup and supervisord eventually gives up, leaving 8443 down.
-# If a collision with PORT is detected, fall back to the default 8443 and warn.
-if [ "${CODE_SERVER_PORT}" = "${PORT:-30141}" ]; then
-    echo "WARNING: CODE_SERVER_PORT (${CODE_SERVER_PORT}) collides with pi-web PORT (${PORT:-30141}); using 8443 for code-server instead."
-    CODE_SERVER_PORT=8443
-fi
-export CODE_SERVER_PORT
 CODE_SERVER_DATA_DIR="/root/.pi/code-server"
 
 install_code_server_extensions() {
@@ -103,7 +94,7 @@ if [ "$CODE_SERVER_ENABLED" = "true" ]; then
     # Write the code-server supervisor program (conditionally enabled).
     cat > /etc/supervisor/conf.d/code-server.conf <<EOF
 [program:code-server]
-command=code-server --bind-addr 0.0.0.0:%(ENV_CODE_SERVER_PORT)s --auth password --user-data-dir ${CODE_SERVER_DATA_DIR} --extensions-dir ${CODE_SERVER_DATA_DIR}/extensions --disable-telemetry --disable-update-check /workspace
+command=code-server --bind-addr 0.0.0.0:8443 --auth password --user-data-dir ${CODE_SERVER_DATA_DIR} --extensions-dir ${CODE_SERVER_DATA_DIR}/extensions --disable-telemetry --disable-update-check /workspace
 environment=PASSWORD=%(ENV_PASSWORD)s
 autostart=true
 autorestart=true
