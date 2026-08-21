@@ -10,9 +10,15 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-30141}:${PORT:-30141}"
+      - "${CODE_SERVER_PORT:-8443}:${CODE_SERVER_PORT:-8443}"
     environment:
       - PORT=${PORT:-30141}
       - PI_WEB_PASSWORD=${PI_WEB_PASSWORD:-}
+      # Code-server (VS Code Web) settings
+      - CODE_SERVER_PORT=${CODE_SERVER_PORT:-8443}
+      - CODE_SERVER_PASSWORD=${CODE_SERVER_PASSWORD:-}
+      - CODE_SERVER_EXTENSIONS=${CODE_SERVER_EXTENSIONS:-}
+      - CODE_SERVER_ENABLED=${CODE_SERVER_ENABLED:-true}
       # Auto update packages on container start (true/false)
       - AUTO_UPDATE=${AUTO_UPDATE:-false}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}

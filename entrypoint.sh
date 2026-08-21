@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-# Ensure persistence and workspace directories exist
-mkdir -p /root/.pi /workspace
+# Ensure persistence, workspace and supervisor config directories exist
+mkdir -p /root/.pi /workspace /etc/supervisor/conf.d
 
 #
 # Persist git global config (.gitconfig) and credentials token (.git-credentials)
@@ -37,11 +37,89 @@ if [ "${AUTO_UPDATE:-false}" = "true" ]; then
     npm update -g @earendil-works/pi-coding-agent @agegr/pi-web || true
 fi
 
-# If no arguments or flags are passed, start pi-web
-if [ $# -eq 0 ] || [ "${1:0:1}" = '-' ]; then
-    echo "Starting Pi-Web UI server on 0.0.0.0:${PORT:-30141}..."
-    exec pi-web -H 0.0.0.0 -p "${PORT:-30141}" --no-open "$@"
+#
+# Code-server (VS Code Web)
+# Settings / extensions are persisted inside the pi_data volume (/root/.pi/code-server)
+# so they survive container recreation, just like the rest of the Pi agent config.
+#
+CODE_SERVER_ENABLED="${CODE_SERVER_ENABLED:-true}"
+CODE_SERVER_PORT="${CODE_SERVER_PORT:-8443}"
+CODE_SERVER_DATA_DIR="/root/.pi/code-server"
+
+install_code_server_extensions() {
+    mkdir -p "$CODE_SERVER_DATA_DIR"
+    local ext
+    IFS=',' read -r -a exts <<< "${CODE_SERVER_EXTENSIONS}"
+    echo "code-server: installing configured extensions: ${CODE_SERVER_EXTENSIONS}"
+    for ext in "${exts[@]}"; do
+        ext="$(echo "$ext" | xargs)"   # trim surrounding whitespace
+        [ -z "$ext" ] && continue
+        if code-server --list-extensions --user-data-dir "$CODE_SERVER_DATA_DIR" --extensions-dir "$CODE_SERVER_DATA_DIR/extensions" 2>/dev/null | grep -qxF "$ext"; then
+            echo "code-server: extension already installed: ${ext}"
+        elif code-server --install-extension "$ext" --user-data-dir "$CODE_SERVER_DATA_DIR" --extensions-dir "$CODE_SERVER_DATA_DIR/extensions" >/dev/null 2>&1; then
+            echo "code-server: extension installed: ${ext}"
+        else
+            echo "code-server: WARNING - failed to install extension: ${ext}"
+        fi
+    done
+}
+
+# If a concrete command is passed (e.g. docker run ... pi or bash), run it
+# directly and skip the supervisor / web services entirely.
+if [ $# -gt 0 ] && [ "${1:0:1}" != '-' ]; then
+    exec "$@"
 fi
 
-# Execute passed command (e.g. docker run ... pi or bash)
-exec "$@"
+# Install configured extensions BEFORE starting the server (a running server
+# locks its data dir). Only relevant when code-server is enabled.
+if [ "$CODE_SERVER_ENABLED" = "true" ] && [ -n "${CODE_SERVER_EXTENSIONS:-}" ]; then
+    install_code_server_extensions
+fi
+
+# Generate a random password when code-server is enabled and none was provided.
+# It is printed to the logs and exported as PASSWORD for the code-server program.
+if [ "$CODE_SERVER_ENABLED" = "true" ]; then
+    if [ -z "${CODE_SERVER_PASSWORD:-}" ]; then
+        CODE_SERVER_PASSWORD="$(node -e 'process.stdout.write(require("crypto").randomBytes(12).toString("base64"))')"
+        echo ""
+        echo "=================================================================="
+        echo " code-server: no CODE_SERVER_PASSWORD configured."
+        echo " Generated random password for this session: ${CODE_SERVER_PASSWORD}"
+        echo " (It changes on every container restart. Set CODE_SERVER_PASSWORD"
+        echo "  in .env to use a fixed password.)"
+        echo "=================================================================="
+        echo ""
+    fi
+    export PASSWORD="$CODE_SERVER_PASSWORD"
+
+    # Write the code-server supervisor program (conditionally enabled).
+    cat > /etc/supervisor/conf.d/code-server.conf <<EOF
+[program:code-server]
+command=code-server --bind-addr 0.0.0.0:%(ENV_CODE_SERVER_PORT)s --auth password --user-data-dir %(ENV_CODE_SERVER_DATA_DIR)s --extensions-dir %(ENV_CODE_SERVER_DATA_DIR)s/extensions --disable-telemetry --disable-update-check /workspace
+environment=PASSWORD=%(ENV_PASSWORD)s
+autostart=true
+autorestart=true
+startsecs=3
+stopsignal=SIGTERM
+stopwaitsecs=10
+stopasgroup=true
+killasgroup=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+redirect_stderr=true
+EOF
+else
+    echo "code-server is disabled (CODE_SERVER_ENABLED != true). Skipping."
+    rm -f /etc/supervisor/conf.d/code-server.conf
+fi
+
+# If flags were passed on the command line (e.g. docker run ... -e ...), forward
+# them to pi-web as extra arguments.
+if [ $# -gt 0 ]; then
+    export PI_WEB_ARGS="$*"
+fi
+
+# Hand off to supervisord (PID 1) which supervises pi-web and, when enabled,
+# code-server. Each program is independently restarted and gracefully stopped
+# on container shutdown (supervisord forwards SIGTERM to its children).
+exec supervisord -c /etc/supervisor/supervisord.conf
