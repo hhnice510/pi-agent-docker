@@ -38,6 +38,8 @@ jobs:
           WEB_VER=$(npm view @agegr/pi-web version 2>/dev/null || echo "0.0.0")
           COMBINED_VER="pi-${PI_VER}_web-${WEB_VER}"
           echo "Upstream versions: pi=${PI_VER}, pi-web=${WEB_VER}"
+          echo "pi_version=${PI_VER}" >> $GITHUB_OUTPUT
+          echo "web_version=${WEB_VER}" >> $GITHUB_OUTPUT
           echo "combined_version=${COMBINED_VER}" >> $GITHUB_OUTPUT
           echo "${COMBINED_VER}" > .last_built_version
 
@@ -95,15 +97,16 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          no-cache: true
+          build-args: |
+            PI_VERSION=${{ steps.check_upstream.outputs.pi_version }}
+            PI_WEB_VERSION=${{ steps.check_upstream.outputs.web_version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # 不使用 GHA 层缓存：之前 cache-from/to: type=gha 复用了旧的
-          # entrypoint.sh 层，导致打出的镜像 code-server 仍绑在错误的端口。
-          # 每次全量重建，确保提交进仓库的 Dockerfile/entrypoint 被正确打进镜像。
 
       - name: Save built version cache
-        if: steps.build_decision.outputs.should_build == 'true' && github.event_name != 'pull_request'
+        if: steps.build_decision.outputs.should_build == 'true' && github.event_name != 'pull_request' && steps.cache_version.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: .last_built_version

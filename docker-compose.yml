@@ -1,11 +1,3 @@
-# Pi Agent Docker — docker-compose (pi-web + code-server / VS Code Web)
-#
-# 容器内部端口已在镜像内固定（Dockerfile ENV）：
-#   - pi-web (Web UI)         = 30141
-#   - code-server (VS Code Web) = 8443
-# 下方 ports 即 宿主:容器 映射（默认宿主端口与容器端口相同）。
-# 若需宿主端口与容器端口不同（例如宿主 30142 -> 容器 30141），改冒号左侧即可。
-
 services:
   pi-agent:
     build:
@@ -15,33 +7,36 @@ services:
     container_name: pi-agent
     restart: unless-stopped
     ports:
+      # 宿主机端口:容器内固定端口（如需修改宿主端口，修改冒号左侧即可）
       - "30141:30141"
       - "8443:8443"
     environment:
-      # pi-web (Web UI)
+      # pi-web (Web UI) Basic Auth 密码（可选，留空无密码，默认用户名 pi）
       - PI_WEB_PASSWORD=${PI_WEB_PASSWORD:-}
-      # Code-server (VS Code Web)
+      # Code-server 密码（可选，留空启动时自动随机生成）
       - CODE_SERVER_PASSWORD=${CODE_SERVER_PASSWORD:-}
+      # Code-server 启动自动安装扩展（可选，多个扩展用英文逗号分隔）
       - CODE_SERVER_EXTENSIONS=${CODE_SERVER_EXTENSIONS:-}
+      # Code-server 启用开关
       - CODE_SERVER_ENABLED=${CODE_SERVER_ENABLED:-true}
-      # 自动更新（容器启动时把 pi / pi-web 更新到 npm 最新版）
+      # 自动更新（容器启动时更新 pi 与 pi-web 到 npm 最新版）
       - AUTO_UPDATE=${AUTO_UPDATE:-false}
       # LLM Provider API Keys
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      # HTTP 代理（仅用于 pi-web 服务端访问模型/API，可选）
+      # HTTP 代理（可选）
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
       - NO_PROXY=${NO_PROXY:-}
     extra_hosts:
-      # 让容器内可通过 host.docker.internal 访问 Docker 宿主机
+      # 让容器内可通过 host.docker.internal 访问宿主机
       - "host.docker.internal:host-gateway"
     volumes:
-      # 持久化 Pi Agent 配置 / 会话 / 设置 / code-server 数据（~/.pi）
+      # 持久化 Pi Agent 配置、会话及 code-server 数据
       - pi_data:/root/.pi
-      # 持久化你的代码项目（pi-web / code-server / pi CLI 共享同一目录）
+      # 持久化代码项目目录（pi-web / code-server / pi CLI 共享）
       - ./workspace:/workspace
 
 volumes:

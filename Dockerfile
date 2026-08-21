@@ -30,8 +30,10 @@ RUN set -eux; \
     code-server --version; \
     rm -f "/tmp/${DEB}"
 
-# Global installation of Pi Agent CLI and Pi-Web UI
-RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent @agegr/pi-web
+# Global installation of Pi Agent CLI and Pi-Web UI (versions passed via build args for precise cache control)
+ARG PI_VERSION=latest
+ARG PI_WEB_VERSION=latest
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@${PI_VERSION} @agegr/pi-web@${PI_WEB_VERSION}
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -46,9 +48,8 @@ WORKDIR /workspace
 COPY entrypoint.sh /entrypoint.sh
 COPY supervisord.conf /etc/supervisor/supervisord.conf
 RUN chmod +x /entrypoint.sh
-RUN mkdir -p /etc/supervisor/conf.d
 
-# Expose Web UI and code-server ports
+# Expose Web UI (30141) and code-server (8443) ports
 EXPOSE 30141 8443
 
 ENTRYPOINT ["/entrypoint.sh"]
