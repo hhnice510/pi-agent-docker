@@ -1,4 +1,10 @@
-version: '3.8'
+# Pi Agent Docker — docker-compose (pi-web + code-server / VS Code Web)
+#
+# 容器内部端口已在镜像内固定（Dockerfile ENV）：
+#   - pi-web (Web UI)         = 30141
+#   - code-server (VS Code Web) = 8443
+# 下方 ports 即 宿主:容器 映射（默认宿主端口与容器端口相同）。
+# 若需宿主端口与容器端口不同（例如宿主 30142 -> 容器 30141），改冒号左侧即可。
 
 services:
   pi-agent:
@@ -9,30 +15,33 @@ services:
     container_name: pi-agent
     restart: unless-stopped
     ports:
-      - "${PORT:-30141}:${PORT:-30141}"
-      - "${CODE_SERVER_PORT:-8443}:${CODE_SERVER_PORT:-8443}"
+      - "30141:30141"
+      - "8443:8443"
     environment:
-      - PORT=${PORT:-30141}
+      # pi-web (Web UI)
       - PI_WEB_PASSWORD=${PI_WEB_PASSWORD:-}
-      # Code-server (VS Code Web) settings
-      - CODE_SERVER_PORT=${CODE_SERVER_PORT:-8443}
+      # Code-server (VS Code Web)
       - CODE_SERVER_PASSWORD=${CODE_SERVER_PASSWORD:-}
       - CODE_SERVER_EXTENSIONS=${CODE_SERVER_EXTENSIONS:-}
       - CODE_SERVER_ENABLED=${CODE_SERVER_ENABLED:-true}
-      # Auto update packages on container start (true/false)
+      # 自动更新（容器启动时把 pi / pi-web 更新到 npm 最新版）
       - AUTO_UPDATE=${AUTO_UPDATE:-false}
+      # LLM Provider API Keys
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      # HTTP Proxy for pi-web server-side model/API requests (optional)
+      # HTTP 代理（仅用于 pi-web 服务端访问模型/API，可选）
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
       - NO_PROXY=${NO_PROXY:-}
     extra_hosts:
-      # Allow containers to reach the Docker host via host.docker.internal
+      # 让容器内可通过 host.docker.internal 访问 Docker 宿主机
       - "host.docker.internal:host-gateway"
     volumes:
-      # Persist Pi agent configuration, sessions, extensions and settings (~/.pi)
+      # 持久化 Pi Agent 配置 / 会话 / 设置 / code-server 数据（~/.pi）
       - pi_data:/root/.pi
-      # Persist coding projects workspace
+      # 持久化你的代码项目（pi-web / code-server / pi CLI 共享同一目录）
       - ./workspace:/workspace
 
 volumes:
