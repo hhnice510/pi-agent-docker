@@ -44,6 +44,14 @@ fi
 #
 CODE_SERVER_ENABLED="${CODE_SERVER_ENABLED:-true}"
 CODE_SERVER_PORT="${CODE_SERVER_PORT:-8443}"
+# Guard: code-server must not share pi-web's port, otherwise it fails to bind
+# (EADDRINUSE) on startup and supervisord eventually gives up, leaving 8443 down.
+# If a collision with PORT is detected, fall back to the default 8443 and warn.
+if [ "${CODE_SERVER_PORT}" = "${PORT:-30141}" ]; then
+    echo "WARNING: CODE_SERVER_PORT (${CODE_SERVER_PORT}) collides with pi-web PORT (${PORT:-30141}); using 8443 for code-server instead."
+    CODE_SERVER_PORT=8443
+fi
+export CODE_SERVER_PORT
 CODE_SERVER_DATA_DIR="/root/.pi/code-server"
 
 install_code_server_extensions() {
