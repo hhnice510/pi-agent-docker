@@ -13,7 +13,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push:
@@ -21,10 +20,17 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        # 定时任务(schedule)同时构建 main 与 pi-agent-web-only，各自推到各自镜像仓库；
+        # 其它事件(push/pr/dispatch)只构建触发本次运行的那个分支。
+        include: ${{ github.event_name == 'schedule' && fromJSON('[{"branch":"main","image":"hhnice510/pi-agent-docker"},{"branch":"pi-agent-web-only","image":"hhnice510/pi-agent-web-only"}]') || fromJSON(concat('[{"branch":"', github.ref_name, '","image":"', github.repository, '"}]')) }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
 
       - name: Setup Node.js (for checking npm versions)
         uses: actions/setup-node@v4
@@ -48,7 +54,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .last_built_version
-          key: upstream-ver-${{ steps.check_upstream.outputs.combined_version }}
+          # 每个分支(镜像)独立缓存，避免 main 与 pi-agent-web-only 共用 key 导致其中一个被跳过
+          key: upstream-ver-${{ matrix.branch }}-${{ steps.check_upstream.outputs.combined_version }}
 
       - name: Determine if build is required
         id: build_decision
@@ -83,9 +90,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ matrix.image }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=raw,value=latest,enable=${{ matrix.branch == github.event.repository.default_branch || matrix.branch == 'pi-agent-web-only' }}
             type=raw,value=${{ steps.check_upstream.outputs.combined_version }}
             type=ref,event=tag
             type=semver,pattern={{version}}
@@ -111,4 +118,5 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .last_built_version
-          key: upstream-ver-${{ steps.check_upstream.outputs.combined_version }}
+          # 每个分支(镜像)独立缓存
+          key: upstream-ver-${{ matrix.branch }}-${{ steps.check_upstream.outputs.combined_version }}
