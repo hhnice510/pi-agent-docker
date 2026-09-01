@@ -1,66 +1,48 @@
 #!/usr/bin/env bash
 set -e
 
-# 1. Ensure required directories exist
-mkdir -p /root/.pi/agent/extensions /root/.pi/code-server/extensions /workspace
+# Ensure persistence and workspace directories exist
+mkdir -p /root/.pi /workspace
 
-# 2. Sync built-in Pi Agent extensions
-if [ -d "/opt/pi/extensions" ]; then
-  cp -rf /opt/pi/extensions/* /root/.pi/agent/extensions/ 2>/dev/null || true
-fi
+#
+# Persist git global config (.gitconfig) and credentials token (.git-credentials)
+# The persistent volume pi_data mounts at /root/.pi, while git reads these files
+# from /root (HOME). Sync them so config survives container recreation.
+# Strategy: newest-wins bidirectional sync on startup.
+#
+sync_git_config() {
+    local src="/root/$1"
+    local dst="/root/.pi/$1"
+    if [ -f "$src" ] && [ -f "$dst" ]; then
+        # both exist -> newest wins
+        if [ "$src" -nt "$dst" ]; then
+            cp -f "$src" "$dst"
+        else
+            cp -f "$dst" "$src"
+        fi
+    elif [ -f "$src" ]; then
+        cp -f "$src" "$dst"
+    elif [ -f "$dst" ]; then
+        cp -f "$dst" "$src"
+    fi
+    chmod 600 "$dst" 2>/dev/null || true
+}
 
-# 3. Sync git global config & credentials with persistent volume
-for file in .gitconfig .git-credentials; do
-  if [ -f "/root/.pi/$file" ]; then
-    cp -f "/root/.pi/$file" "/root/$file"
-  elif [ -f "/root/$file" ]; then
-    cp -f "/root/$file" "/root/.pi/$file"
-  fi
-  chmod 600 "/root/$file" "/root/.pi/$file" 2>/dev/null || true
-done
+sync_git_config .gitconfig
+sync_git_config .git-credentials
 
-# 3. Optional auto-update for pi agent packages
+# Optionally auto-update pi agent and pichamber packages on startup
 if [ "${AUTO_UPDATE:-false}" = "true" ]; then
-  echo "AUTO_UPDATE is enabled. Updating pi packages to latest..."
-  npm update -g @earendil-works/pi-coding-agent @agegr/pi-web || true
+    echo "AUTO_UPDATE is enabled. Updating @earendil-works/pi-coding-agent and @amagicpear/pichamber to latest versions..."
+    npm update -g @earendil-works/pi-coding-agent @amagicpear/pichamber || true
 fi
 
-# 4. Direct CLI execution (e.g. docker run ... pi or bash)
-if [ $# -gt 0 ]; then
-  exec "$@"
+# If no arguments or flags are passed, start pichamber serve
+if [ $# -eq 0 ] || [ "${1:0:1}" = '-' ]; then
+    PORT_VAL="${PORT:-3000}"
+    echo "Starting Pichamber Web UI server on 0.0.0.0:${PORT_VAL}..."
+    exec pichamber serve --host 0.0.0.0 --port "${PORT_VAL}" "$@"
 fi
 
-# 5. Handle code-server disabled toggle
-if [ "${CODE_SERVER_ENABLED:-true}" = "false" ]; then
-  echo "code-server is disabled (CODE_SERVER_ENABLED=false)."
-  sed -i '/\[program:code-server\]/,/redirect_stderr=true/d' /etc/supervisor/supervisord.conf
-else
-  # Install requested VS Code extensions
-  if [ -n "${CODE_SERVER_EXTENSIONS:-}" ]; then
-    IFS=',' read -r -a exts <<< "${CODE_SERVER_EXTENSIONS}"
-    echo "code-server: installing configured extensions: ${CODE_SERVER_EXTENSIONS}"
-    for ext in "${exts[@]}"; do
-      ext="$(echo "$ext" | xargs)"
-      [ -z "$ext" ] && continue
-      code-server --install-extension "$ext" --user-data-dir /root/.pi/code-server --extensions-dir /root/.pi/code-server/extensions >/dev/null 2>&1 || echo "code-server: WARNING - failed to install ${ext}"
-    done
-  fi
-
-  # Configure code-server password
-  if [ -z "${CODE_SERVER_PASSWORD:-}" ]; then
-    PASSWORD="$(node -e 'process.stdout.write(require("crypto").randomBytes(12).toString("base64"))')"
-    echo ""
-    echo "=================================================================="
-    echo " code-server: no CODE_SERVER_PASSWORD configured."
-    echo " Generated random session password: ${PASSWORD}"
-    echo " (Set CODE_SERVER_PASSWORD in .env to use a fixed password)"
-    echo "=================================================================="
-    echo ""
-  else
-    PASSWORD="$CODE_SERVER_PASSWORD"
-  fi
-  export PASSWORD
-fi
-
-# 6. Launch supervisord process manager (PID 1)
-exec supervisord -c /etc/supervisor/supervisord.conf
+# Execute passed command (e.g. docker run ... pi or bash)
+exec "$@"

@@ -5,14 +5,15 @@ on:
     # 每天 00:00 UTC (北京时间 08:00) 自动检测上游更新
     - cron: '0 0 * * *'
   push:
-    branches: [ "main", "master" ]
+    branches: [ "pi-agent-pichamber" ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "pi-agent-pichamber" ]
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_NAME: hhnice510/pi-agent-pichamber
 
 jobs:
   build-and-push:
@@ -20,17 +21,10 @@ jobs:
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        # 定时任务(schedule)同时构建 main、pi-agent-web-only 与 pi-agent-pichamber，各自推到各自镜像仓库；
-        # 其它事件(push/pr/dispatch)只构建触发本次运行的那个分支。
-        include: ${{ github.event_name == 'schedule' && fromJSON('[{"branch":"main","image":"hhnice510/pi-agent-docker"},{"branch":"pi-agent-web-only","image":"hhnice510/pi-agent-web-only"},{"branch":"pi-agent-pichamber","image":"hhnice510/pi-agent-pichamber"}]') || fromJSON(concat('[{"branch":"', github.ref_name, '","image":"', github.repository, '"}]')) }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.branch }}
 
       - name: Setup Node.js (for checking npm versions)
         uses: actions/setup-node@v4
@@ -41,11 +35,11 @@ jobs:
         id: check_upstream
         run: |
           PI_VER=$(npm view @earendil-works/pi-coding-agent version 2>/dev/null || echo "0.0.0")
-          WEB_VER=$(npm view @agegr/pi-web version 2>/dev/null || echo "0.0.0")
-          COMBINED_VER="pi-${PI_VER}_web-${WEB_VER}"
-          echo "Upstream versions: pi=${PI_VER}, pi-web=${WEB_VER}"
+          PICHAMBER_VER=$(npm view @amagicpear/pichamber version 2>/dev/null || echo "0.0.0")
+          COMBINED_VER="pi-${PI_VER}_pichamber-${PICHAMBER_VER}"
+          echo "Upstream versions: pi=${PI_VER}, pichamber=${PICHAMBER_VER}"
           echo "pi_version=${PI_VER}" >> $GITHUB_OUTPUT
-          echo "web_version=${WEB_VER}" >> $GITHUB_OUTPUT
+          echo "pichamber_version=${PICHAMBER_VER}" >> $GITHUB_OUTPUT
           echo "combined_version=${COMBINED_VER}" >> $GITHUB_OUTPUT
           echo "${COMBINED_VER}" > .last_built_version
 
@@ -54,8 +48,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .last_built_version
-          # 每个分支(镜像)独立缓存，避免 main 与 pi-agent-web-only 共用 key 导致其中一个被跳过
-          key: upstream-ver-${{ matrix.branch }}-${{ steps.check_upstream.outputs.combined_version }}
+          key: upstream-ver-pi-agent-pichamber-${{ steps.check_upstream.outputs.combined_version }}
 
       - name: Determine if build is required
         id: build_decision
@@ -90,9 +83,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ matrix.branch == github.event.repository.default_branch || matrix.branch == 'pi-agent-web-only' }}
+            type=raw,value=latest
             type=raw,value=${{ steps.check_upstream.outputs.combined_version }}
             type=ref,event=tag
             type=semver,pattern={{version}}
@@ -107,7 +100,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
             PI_VERSION=${{ steps.check_upstream.outputs.pi_version }}
-            PI_WEB_VERSION=${{ steps.check_upstream.outputs.web_version }}
+            PICHAMBER_VERSION=${{ steps.check_upstream.outputs.pichamber_version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: ${{ steps.meta.outputs.tags }}
@@ -118,5 +111,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .last_built_version
-          # 每个分支(镜像)独立缓存
-          key: upstream-ver-${{ matrix.branch }}-${{ steps.check_upstream.outputs.combined_version }}
+          key: upstream-ver-pi-agent-pichamber-${{ steps.check_upstream.outputs.combined_version }}

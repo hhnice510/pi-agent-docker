@@ -1,168 +1,119 @@
-# Pi Agent Docker (Pi Web UI + VS Code Web)
+# Pi Agent + Pichamber Docker
 
-本项目提供了一个将 **[Pi Coding Agent](https://pi.dev/)** 引擎、**[Pi Web UI](https://github.com/agegr/pi-web)** 前端以及 **code-server (VS Code Web)** 打包在同一容器内的 Docker 化开发环境。支持数据持久化管理与 GitHub Actions 自动构建打包推送至 GitHub Container Registry (GHCR)。
+[![Build and Push Docker Image to GHCR](https://github.com/hhnice510/pi-agent-docker/actions/workflows/docker-publish.yml/badge.svg?branch=pi-agent-pichamber)](https://github.com/hhnice510/pi-agent-docker/actions/workflows/docker-publish.yml)
+[![Docker Image](https://img.shields.io/badge/GHCR-pi--agent--pichamber-blue?logo=docker)](https://github.com/hhnice510/pi-agent-docker/pkgs/container/pi-agent-pichamber)
 
----
+这是 **Pi Agent (CLI)** 与 **[Pichamber](https://github.com/AMagicPear/pichamber)** 极简 Web 面板的一体化 Docker 镜像方案。
 
-## 🌟 核心特性
-
-- **一站式开发环境**：基于 `Node.js 22 (Debian Bookworm)`，预装 `git`、`vim`、`ripgrep`、`curl`、`build-essential` 等工具。
-- **Pi Web 可视化前端**：内置 [agegr/pi-web](https://github.com/agegr/pi-web) 交互式 Web Dashboard，容器内固定端口 `30141`。
-- **Code-server (VS Code Web)**：浏览器内获得完整的 VS Code 体验，直接编辑 `/workspace` 代码并进行 Git 版本管理，容器内固定端口 `8443`。
-- **三控交互体验**：
-  1. **Web Dashboard**：通过浏览器访问 Pi Web 进行 AI 对话、任务协作与会话管理；
-  2. **VS Code Web**：通过浏览器访问 code-server 编辑代码与进行 Git 操作；
-  3. **CLI 终端**：随时通过终端进入容器使用 `pi` 命令行交互。
-- **全量持久化**：
-  - `pi_data` (`/root/.pi`)：持久化保存模型配置、扩展技能 (Skills)、自定义 Prompt、历史 Session、Git 全局配置（用户名/邮箱/凭证）以及 code-server 配置与扩展（`/root/.pi/code-server`）。
-  - `workspace` (`/workspace`)：持久化挂载您的本地代码项目，Pi Web、code-server 与 Pi CLI 共享同一工作区。
-- **轻量进程守护（Supervisord）**：容器以 `supervisord` 作为 PID 1 统一管理 `pi-web` 与 `code-server`，独立运行、异常自动重启（`autorestart`）、优雅退出（SIGTERM）。
-- **智能 CI/CD (GHCR)**：包含 GitHub Actions 工作流，每天定时检测上游 npm 更新，自动构建 `amd64` 与 `arm64` 双架构镜像并推送至 GHCR。
+> **分支说明**：
+> - `main`：完整版，包含 Pi Agent + Pi-Web + code-server (VS Code Web)。
+> - `pi-agent-web-only`：轻量版，仅包含 Pi Agent + Pi-Web。
+> - `pi-agent-pichamber`（当前分支）：轻量版，仅包含 **Pi Agent + Pichamber Web UI**（基于 Bun 运行时的现代化 Pi Agent 交互面板）。
 
 ---
 
-## 📁 目录结构
+## ✨ 核心特性
 
-```text
-.
-├── Dockerfile                   # Docker 镜像构建文件 (Node 22 Debian)
-├── docker-compose.yml           # Docker Compose 本地启动与持久化配置
-├── entrypoint.sh                # 容器启动入口脚本 (Supervisord 启动与环境初始化)
-├── supervisord.conf             # Supervisord 多进程管理配置
-├── .env.example                 # 环境变量配置模版
-├── extensions/                  # 内置 Pi Agent 扩展与插件
-│   └── code-server-manager.ts   # VS Code Web 动态启停管理插件 (Tool & Command)
-├── .github/
-│   └── workflows/
-│       └── docker-publish.yml   # GitHub Actions 构建与推送工作流
-└── README.md                    # 说明文档
-```
+- ⚡ **开箱即用**：内置 Node.js 22、Bun (>=1.3)、`@earendil-works/pi-coding-agent` 与 `@amagicpear/pichamber`。
+- 🎨 **Pichamber 面板**：集成 Vue 3 + Bun 的全新轻量级 Pi Agent 交互式 GUI 面板，自带真实终端与状态管理。
+- 🔄 **自动定时构建与更新**：GitHub Actions 每天自动检测 NPM 上游更新（`pi-coding-agent` 和 `pichamber`），有新版本发布即自动构建并推送最新多架构镜像（`linux/amd64`、`linux/arm64`）。
+- 💾 **数据持久化**：宿主机工作区与容器内 `/workspace` 双向同步；配置、会话历史、Git 凭据自动持久化到 Docker Volume。
+- 🌐 **代理友好**：一键打通宿主机代理（Clash / Surge / v2rayA 等）。
 
 ---
 
 ## 🚀 快速开始
 
-### 方式一：使用 Docker Compose 本地运行（推荐）
-
-1. **配置环境变量**
-   ```bash
-   cp .env.example .env
-   ```
-   *在 `.env` 中填入您的 LLM API 密钥（如 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`）及可选的访问密码。*
-
-2. **创建代码工作区目录**
-   ```bash
-   mkdir -p workspace
-   ```
-
-3. **启动容器**
-   ```bash
-   docker compose up -d
-   ```
-
-4. **访问服务**
-   - **Pi Web UI**：[http://localhost:30141](http://localhost:30141)
-   - **VS Code Web**：[http://localhost:8443](http://localhost:8443)（若未配置 `CODE_SERVER_PASSWORD`，随机生成的密码会打印在容器启动日志中，可通过 `docker compose logs` 查看）
-
----
-
-### 方式二：使用 GHCR 预构建镜像直接运行
+### 1. 克隆代码并进入分支
 
 ```bash
-docker run -d \
-  --name pi-agent \
-  -p 30141:30141 \
-  -p 8443:8443 \
-  -v pi_agent_data:/root/.pi \
-  -v $(pwd)/workspace:/workspace \
-  -e ANTHROPIC_API_KEY="your_api_key_here" \
-  -e CODE_SERVER_PASSWORD="your_secure_password" \
-  ghcr.io/hhnice510/pi-agent-docker:latest
+git clone -b pi-agent-pichamber https://github.com/hhnice510/pi-agent-docker.git
+cd pi-agent-docker
 ```
 
-> **注意**：容器内部端口已固定（Pi Web: `30141`，code-server: `8443`）。如需在宿主机使用其他端口，只需修改端口映射的冒号左侧（例如 `-p 3000:30141 -p 8080:8443`）。
+### 2. 配置环境变量
 
----
-
-## 💻 命令行 CLI 交互
-
-除了 Web 界面，您可以随时直接连接容器使用 `pi` 命令行：
+复制 `.env.example` 为 `.env`：
 
 ```bash
-docker exec -it pi-agent pi
+cp .env.example .env
 ```
 
-或者进入容器的 Bash 终端：
-```bash
-docker exec -it pi-agent bash
+编辑 `.env` 文件，填入你的模型 API 密钥（至少填一个）：
+
+```env
+# Pichamber 宿主机端口
+PICHAMBER_PORT=3000
+
+# 模型 API 密钥
+ANTHROPIC_API_KEY=sk-ant-api03-...
+# OPENAI_API_KEY=sk-...
+# DEEPSEEK_API_KEY=sk-...
+# GEMINI_API_KEY=AIzaSy...
+
+# 如果需要走宿主机代理（可选）
+# HTTP_PROXY=http://host.docker.internal:7890
+# HTTPS_PROXY=http://host.docker.internal:7890
 ```
 
-> **提示**：当使用 `docker run ... <command>` 传入自定义命令（如 `bash` 或 `pi`）时，容器将直接执行该命令并退出，不会启动后台 Web 服务。
-
----
-
-## 🔑 环境变量说明
-
-| 变量名 | 必填 | 示例 | 详细备注 |
-| :--- | :---: | :--- | :--- |
-| **PI_WEB_PASSWORD** | ❌ | `123456` | Web UI Basic Auth 访问密码（用户名默认为 `pi`，留空免密） |
-| **CODE_SERVER_PASSWORD** | ❌ | `123456` | Code-server 登录密码（留空则启动时随机生成并在日志中打印） |
-| **CODE_SERVER_EXTENSIONS** | ❌ | `ms-ceintl.vscode-language-pack-zh-hans,esbenp.prettier-vscode` | 容器启动时自动安装的 VS Code 扩展 ID（多个用英文逗号分隔） |
-| **CODE_SERVER_ENABLED** | ❌ | `true` | 是否在容器内启动 Code-server（`true`/`false`，默认 `true`） |
-| **AUTO_UPDATE** | ❌ | `false` | 容器启动时是否自动升级 `pi` 和 `pi-web` 到 npm 最新版 |
-| **ANTHROPIC_API_KEY** | ❌ | `sk-ant-api03-...` | Anthropic Claude API 密钥（模型密钥按需至少填一个） |
-| **OPENAI_API_KEY** | ❌ | `sk-...` | OpenAI API 密钥 |
-| **DEEPSEEK_API_KEY** | ❌ | `sk-...` | DeepSeek API 密钥 |
-| **GEMINI_API_KEY** | ❌ | `AIzaSy...` | Google Gemini API 密钥 |
-| **HTTP_PROXY** | ❌ | `http://host.docker.internal:7890` | 服务端模型/API 请求 HTTP 代理（宿主机代理用 `host.docker.internal`） |
-| **HTTPS_PROXY** | ❌ | `http://host.docker.internal:7890` | 服务端模型/API 请求 HTTPS 代理 |
-| **NO_PROXY** | ❌ | `localhost,127.0.0.1` | 不走代理的地址白名单 |
-
----
-
-## 🖥️ Code-server (VS Code Web) 说明
-
-1. **工作区与 Git 共享**：
-   - Code-server 默认直接打开 `/workspace`，与 Pi Agent 的工作目录完全一致；
-   - 容器内的 `.gitconfig` 和 `.git-credentials` 会自动同步到 `pi_data` 持久卷中，在 Code-server 中进行 Git 提交、拉取与推送均使用相同身份。
-2. **扩展与配置持久化**：
-   - Code-server 的设置与扩展存放在 `/root/.pi/code-server` 下，容器重建或升级后配置不丢失。
-   - 也可以在 `.env` 中通过 `CODE_SERVER_EXTENSIONS` 指定在启动时自动安装扩展（例如 `ms-ceintl.vscode-language-pack-zh-hans,esbenp.prettier-vscode`）。
-3. **内置 Pi Agent 插件动态启停**：
-   - 本镜像内置了 `code-server-manager` 扩展，Pi Agent 支持通过 Supervisor 按需动态管理 code-server，释放系统内存。
-   - **自然语言对话控制**：直接在 Pi 对话中要求它，如 “*帮我启动 VS Code*”、“*帮我关闭 code-server 释放内存*” 或 “*查看 VS Code 运行状态*”，Pi Agent 将自动调用内置 Tool 完成操作；
-   - **快捷斜杠指令**：在 Pi 终端或对话中输入 `/codeserver [start|stop|restart|status]` 即可直接管理。
-4. **启动时默认禁用**：
-   - 若平时主要使用 Pi Web UI，可在 `.env` 中设置 `CODE_SERVER_ENABLED=false`。需要时亦可通过上述插件让 Agent 动态启动。
-
----
-
-## 🌐 HTTP 代理配置
-
-如果宿主机运行着代理（如 Clash 监听 7890 端口），在 `.env` 中添加：
+### 3. 启动容器
 
 ```bash
-HTTP_PROXY=http://host.docker.internal:7890
-HTTPS_PROXY=http://host.docker.internal:7890
-NO_PROXY=localhost,127.0.0.1
+docker compose up -d
 ```
 
-`docker-compose.yml` 中已内置 `host.docker.internal` 解析支持。
+### 4. 访问服务
+
+在浏览器中打开：
+
+- 🖥️ **Pichamber Web 界面**：[http://localhost:3000](http://localhost:3000)
 
 ---
 
-## 🔄 CI/CD 与智能版本检测 (GHCR)
+## 🛠️ 常用操作
 
-本项目在 `.github/workflows/docker-publish.yml` 中配置了 GitHub Actions 自动化工作流：
+### 进入容器执行 CLI
 
-1. **定时上游版本检测**：每天定时查询 npm 仓库中 `@earendil-works/pi-coding-agent` 和 `@agegr/pi-web` 的最新版本号。
-2. **免重复构建**：若上游版本未发生变更且为定时调度，工作流将在 10 秒内自动跳过构建，避免在 GHCR 产生冗余镜像。
-3. **精准缓存与多架构极速构建**：将版本号作为 `build-arg` 传入 Docker 构建，并启用 GitHub Actions 层级缓存 (`type=gha`)。基础 Debian 系统与 code-server 层无需重复构建，跨架构（`amd64` + `arm64`）打包速度大幅提升。
+```bash
+docker compose exec pi-agent bash
+# 或直接运行 pi 命令
+docker compose exec pi-agent pi
+```
+
+### 查看实时运行日志
+
+```bash
+docker compose logs -f
+```
+
+### 停止并清理容器
+
+```bash
+# 停止容器
+docker compose down
+
+# 停止并删除持久化数据卷（⚠️ 会清除历史会话和配置）
+docker compose down -v
+```
 
 ---
 
-## 🔗 相关链接
+## ⚙️ 环境变量配置参考
 
-- **Pi Agent 官网**: [https://pi.dev/](https://pi.dev/)
-- **Pi Web UI 项目**: [https://github.com/agegr/pi-web](https://github.com/agegr/pi-web)
-- **Code-server 项目**: [https://github.com/coder/code-server](https://github.com/coder/code-server)
+| 变量名 | 默认值 | 描述 |
+| :--- | :--- | :--- |
+| `PICHAMBER_PORT` | `3000` | Pichamber Web UI 映射到宿主机的端口 |
+| `AUTO_UPDATE` | `false` | 容器启动时是否自动运行 `npm update -g` 检查升级最新组件 |
+| `ANTHROPIC_API_KEY` | - | Anthropic Claude API 密钥 |
+| `OPENAI_API_KEY` | - | OpenAI API 密钥 |
+| `DEEPSEEK_API_KEY` | - | DeepSeek API 密钥 |
+| `GEMINI_API_KEY` | - | Google Gemini API 密钥 |
+| `HTTP_PROXY` | - | HTTP 代理地址（如 `http://host.docker.internal:7890`） |
+| `HTTPS_PROXY` | - | HTTPS 代理地址 |
+| `NO_PROXY` | `localhost,127.0.0.1` | 绕过代理的域名/IP 列表 |
+
+---
+
+## 📄 License
+
+MIT License

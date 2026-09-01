@@ -1,6 +1,6 @@
 FROM node:22-bookworm
 
-# Install required system dependencies for Pi Agent tools (git, ripgrep, curl, build essentials, etc.)
+# Install required system dependencies for Pi Agent tools and Bun
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
@@ -10,33 +10,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     ca-certificates \
     openssh-client \
-    supervisor \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install code-server (VS Code Web). Pin the version via ARG (override with --build-arg CODE_SERVER_VERSION=...)
-ARG CODE_SERVER_VERSION=4.133.0
-RUN set -eux; \
-    ARCH="$(uname -m)"; \
-    case "$ARCH" in \
-      x86_64)  DEB="code-server_${CODE_SERVER_VERSION}_amd64.deb" ;; \
-      aarch64) DEB="code-server_${CODE_SERVER_VERSION}_arm64.deb" ;; \
-      *) echo "Unsupported architecture: ${ARCH}" >&2; exit 1 ;; \
-    esac; \
-    curl -fSL -o "/tmp/${DEB}" "https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/${DEB}"; \
-    if ! dpkg -i "/tmp/${DEB}"; then \
-        apt-get install -f -y --no-install-recommends; \
-        apt-get clean; \
-    fi; \
-    code-server --version; \
-    rm -f "/tmp/${DEB}"
+# Install Bun (required by Pichamber runtime)
+ENV BUN_INSTALL="/root/.bun"
+ENV PATH="${BUN_INSTALL}/bin:${PATH}"
+RUN curl -fsSL https://bun.sh/install | bash && \
+    ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
+    bun --version
 
-# Global installation of Pi Agent CLI and Pi-Web UI (versions passed via build args for precise cache control)
+# Global installation of Pi Agent CLI and Pichamber Web UI
 ARG PI_VERSION=latest
-ARG PI_WEB_VERSION=latest
-RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@${PI_VERSION} @agegr/pi-web@${PI_WEB_VERSION}
+ARG PICHAMBER_VERSION=latest
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@${PI_VERSION} @amagicpear/pichamber@${PICHAMBER_VERSION}
 
 # Set environment variables
 ENV NODE_ENV=production
+ENV PORT=3000
+ENV PICHAMBER_HOST=0.0.0.0
+ENV PICHAMBER_PORT=3000
 
 # Create persistence and workspace directories
 RUN mkdir -p /root/.pi /workspace
@@ -44,13 +37,11 @@ RUN mkdir -p /root/.pi /workspace
 # Set default working directory to /workspace
 WORKDIR /workspace
 
-# Copy entrypoint, supervisord configuration, and built-in extensions
+# Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
-COPY supervisord.conf /etc/supervisor/supervisord.conf
-COPY extensions/ /opt/pi/extensions/
 RUN chmod +x /entrypoint.sh
 
-# Expose Web UI (30141) and code-server (8443) ports
-EXPOSE 30141 8443
+# Expose Pichamber Web UI port
+EXPOSE 3000
 
 ENTRYPOINT ["/entrypoint.sh"]
