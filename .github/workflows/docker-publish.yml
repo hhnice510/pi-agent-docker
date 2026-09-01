@@ -22,9 +22,9 @@ jobs:
       packages: write
     strategy:
       matrix:
-        # 定时任务(schedule)同时构建 main 与 pi-agent-web-only，各自推到各自镜像仓库；
+        # 定时任务(schedule)同时构建 main、pi-agent-web-only 与 pi-agent-pichamber，各自推到各自镜像仓库；
         # 其它事件(push/pr/dispatch)只构建触发本次运行的那个分支。
-        include: ${{ github.event_name == 'schedule' && fromJSON('[{"branch":"main","image":"hhnice510/pi-agent-docker"},{"branch":"pi-agent-web-only","image":"hhnice510/pi-agent-web-only"}]') || fromJSON(concat('[{"branch":"', github.ref_name, '","image":"', github.repository, '"}]')) }}
+        include: ${{ github.event_name == 'schedule' && fromJSON('[{"branch":"main","image":"hhnice510/pi-agent-docker"},{"branch":"pi-agent-web-only","image":"hhnice510/pi-agent-web-only"},{"branch":"pi-agent-pichamber","image":"hhnice510/pi-agent-pichamber"}]') || fromJSON(concat('[{"branch":"', github.ref_name, '","image":"', github.repository, '"}]')) }}
 
     steps:
       - name: Checkout repository
