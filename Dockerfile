@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     ca-certificates \
     openssh-client \
+    supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 # Global installation of Pi Agent CLI and Pi-Web UI
@@ -25,8 +26,9 @@ RUN mkdir -p /root/.pi /workspace
 # Set default working directory to /workspace
 WORKDIR /workspace
 
-# Copy entrypoint script
+# Copy entrypoint script and supervisord configuration
 COPY entrypoint.sh /entrypoint.sh
+COPY supervisord.conf /etc/supervisor/supervisord.conf
 RUN chmod +x /entrypoint.sh
 
 # Expose Web UI port

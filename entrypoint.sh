@@ -2,7 +2,7 @@
 set -e
 
 # Ensure persistence and workspace directories exist
-mkdir -p /root/.pi /workspace
+mkdir -p /root/.pi /root/.pi/agent/extensions /workspace
 
 #
 # Persist git global config (.gitconfig) and credentials token (.git-credentials)
@@ -37,11 +37,18 @@ if [ "${AUTO_UPDATE:-false}" = "true" ]; then
     npm update -g @earendil-works/pi-coding-agent @agegr/pi-web || true
 fi
 
-# If no arguments or flags are passed, start pi-web
-if [ $# -eq 0 ] || [ "${1:0:1}" = '-' ]; then
-    echo "Starting Pi-Web UI server on 0.0.0.0:${PORT:-30141}..."
-    exec pi-web -H 0.0.0.0 -p "${PORT:-30141}" --no-open "$@"
+# Direct CLI execution (e.g. docker run ... pi or bash) bypasses the Web UI.
+if [ $# -gt 0 ] && [ "${1:0:1}" != '-' ]; then
+    exec "$@"
 fi
 
-# Execute passed command (e.g. docker run ... pi or bash)
-exec "$@"
+# Forward any remaining flags to pi-web itself (e.g. -p 30241)
+PI_WEB_EXTRA_ARGS="$*"
+export PI_WEB_EXTRA_ARGS
+
+# Launch supervisord as PID 1:
+#   - pi-web runs as a supervised child process and is restarted automatically on crash
+#   - the Web UI can be restarted safely without stopping the container:
+#       docker exec pi-agent supervisorctl restart pi-web
+echo "Starting Pi-Web UI server on 0.0.0.0:${PORT:-30141} (managed by supervisord)..."
+exec supervisord -c /etc/supervisor/supervisord.conf

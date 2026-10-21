@@ -1,4 +1,4 @@
-# Pi Agent Docker & Pi Web UI 
+# Pi Agent Docker & Pi Web UI
 
 本项目提供了一个用于运行 **[Pi Coding Agent](https://pi.dev/)** 引擎及其 **[Pi Web UI](https://github.com/agegr/pi-web)** 前端的 Dockerized 解决方案，支持数据持久化管理与 GitHub Actions 自动构建打包推送至 GitHub Container Registry (GHCR)。
 
@@ -22,7 +22,8 @@
 .
 ├── Dockerfile                   # Docker 镜像构建文件 (Node 22 Debian)
 ├── docker-compose.yml           # Docker Compose 本地启动与持久化挂载配置
-├── entrypoint.sh                # 容器启动入口脚本
+├── entrypoint.sh                # 容器启动入口脚本 (以 supervisord 作为 PID 1)
+├── supervisord.conf             # 进程托管配置 (仅 Pi Web UI，无 code-server)
 ├── .env.example                 # 环境变量模版 (API Key, Web端口, 密码)
 ├── .github/
 │   └── workflows/
@@ -37,17 +38,21 @@
 ### 方式一：使用 Docker Compose 本地构建启动（推荐）
 
 1. **复制并配置环境变量**
+
    ```bash
    cp .env.example .env
    ```
+
    *根据需求在 `.env` 中填入您的 LLM API 密钥（如 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`）或可选的 Web UI 访问密码。*
 
 2. **创建本地代码工作区目录（若未创建）**
+
    ```bash
    mkdir -p workspace
    ```
 
 3. **启动容器**
+
    ```bash
    docker compose up -d
    ```
@@ -82,9 +87,32 @@ docker exec -it pi-agent pi
 ```
 
 或者进入容器的 Bash 环境：
+
 ```bash
 docker exec -it pi-agent bash
 ```
+
+---
+
+## ♻️ 进程托管与热重启
+
+容器以 `supervisord` 作为 PID 1，`pi-web` 作为被托管的子进程运行（`autorestart=true`），好处：
+
+- **崩溃自愈**：`pi-web` 异常退出时会被自动拉起，容器不会跟着退出。
+- **安全热重启**：重启 Web UI 不再需要重启容器（旧版本 `pi-web` 是 PID 1，`kill` 掉等于杀掉容器）。
+
+```bash
+# 查看进程状态
+docker exec pi-agent supervisorctl status
+
+# 重启 Web UI（秒级生效，容器不中断）
+docker exec pi-agent supervisorctl restart pi-web
+
+# 实时日志
+docker logs -f pi-agent
+```
+
+> 如果使用 `docker run ... bash` 等命令启动容器，则会跳过 Web UI 直接执行该命令。
 
 ---
 
@@ -165,7 +193,8 @@ docker run -d \
 
 为了解决“**每天无脑构建导致无新版本也重复推送镜像**”的问题，本项目在 GitHub Actions 中内置了 **智能上游版本检测机制**：
 
-### 核心工作原理：
+### 核心工作原理
+
 1. **自动查询 NPM Registry**：每次定时任务触发时，Actions 会首先请求 npm 官方仓库，查询 `@earendil-works/pi-coding-agent` 和 `@agegr/pi-web` 的最新版本号（如 `pi-1.2.0_web-1.0.5`）。
 2. **对比历史构建缓存**：Actions 会将版本号与上一次成功构建的 Cache 进行比对。
 3. **精准构建与跳过**：
@@ -174,7 +203,8 @@ docker run -d \
 
 ---
 
-### 如何触发/升级：
+### 如何触发/升级
+
 - **完全自动**：保持默认配置，GitHub 每天 08:00 会自动拉取 npm 版本比对，一旦上游更新就会自动构建推送新镜像。
 - **手动触发**：在 GitHub 仓库 -> **Actions** -> **Build and Push Docker Image to GHCR** -> 点击 **Run workflow**（手动触发不受版本号对比限制，强制重新打包）。
 - **容器内部自动更新 (`AUTO_UPDATE=true`)**：如果不想等待或不想拉新镜像，在 `.env` 中设置 `AUTO_UPDATE=true`，容器启动时会自动在内部更新到 npm 最新版。
@@ -185,4 +215,3 @@ docker run -d \
 
 - **Pi Agent 官网**: [https://pi.dev/](https://pi.dev/)
 - **Pi Web UI 项目**: [https://github.com/agegr/pi-web](https://github.com/agegr/pi-web)
-
