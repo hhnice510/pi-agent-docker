@@ -149,7 +149,8 @@ jobs:
           build-args: |
             PI_VERSION=${{ steps.check_upstream.outputs.pi_version }}
             PI_WEB_VERSION=${{ steps.check_upstream.outputs.web_version }}
-            PICHAMBER_VERSION=${{ steps.check_upstream.outputs.pichamber_version }}          cache-from: type=gha
+            PICHAMBER_VERSION=${{ steps.check_upstream.outputs.pichamber_version }}
+          cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
