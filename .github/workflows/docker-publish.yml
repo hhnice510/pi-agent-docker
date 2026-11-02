@@ -2,8 +2,9 @@ name: Build and Push Docker Image to GHCR
 
 on:
   schedule:
-    # 每天 00:00 UTC (北京时间 08:00) 自动检测上游更新
-    - cron: '0 0 * * *'
+    # 每天 UTC 01:17（北京时间 09:17）自动检测上游 npm 更新。
+    # 刻意避开整点：GitHub 在整点负载最高，定时任务会被延迟甚至直接丢弃。
+    - cron: '17 1 * * *'
   push:
     branches: [ "main", "master" ]
     tags: [ 'v*' ]
@@ -21,16 +22,39 @@ jobs:
       contents: read
       packages: write
     strategy:
+      # 一个分支构建失败时不要取消其它分支的构建
+      fail-fast: false
       matrix:
         # 定时任务(schedule)同时构建 main、pi-agent-web-only 与 pi-agent-pichamber，各自推到各自镜像仓库；
         # 其它事件(push/pr/dispatch)只构建触发本次运行的那个分支。
-        include: ${{ github.event_name == 'schedule' && fromJSON('[{"branch":"main","image":"hhnice510/pi-agent-docker"},{"branch":"pi-agent-web-only","image":"hhnice510/pi-agent-web-only"},{"branch":"pi-agent-pichamber","image":"hhnice510/pi-agent-pichamber"}]') || fromJSON(concat('[{"branch":"', github.ref_name, '","image":"', github.repository, '"}]')) }}
+        #
+        # 注意：GitHub Actions 表达式没有 concat()（那是 Azure Pipelines 的函数），
+        # 拼字符串必须用 format()；format 里字面量大括号用 {{ }} 转义。
+        # 之前误用 concat() 导致整个 workflow 在默认分支上解析失败(startup_failure)，
+        # 而 schedule 只读取默认分支的 workflow，于是定时构建彻底停摆。
+        # 这里只保留一层 fromJSON/format；镜像名映射放到 "Resolve image name" 步骤用 bash 算，
+        # 避免多层嵌套表达式再次写错。
+        include: ${{ github.event_name == 'schedule' && fromJSON('[{"branch":"main"},{"branch":"pi-agent-web-only"},{"branch":"pi-agent-pichamber"}]') || fromJSON(format('[{{"branch":"{0}"}}]', github.ref_name)) }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: ${{ matrix.branch }}
+
+      - name: Resolve image name
+        id: image
+        run: |
+          BRANCH="${{ matrix.branch }}"
+          # main / tag / PR 用仓库名；其它发布分支用 <owner>/<branch>，各自独立镜像仓库。
+          if [ "${{ github.ref_type }}" = "tag" ] || [ "${{ github.event_name }}" = "pull_request" ] || [ "$BRANCH" = "main" ]; then
+            IMAGE="${{ github.repository }}"
+          else
+            IMAGE="${{ github.repository_owner }}/$BRANCH"
+          fi
+          IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
+          echo "Resolved image for branch '$BRANCH': $IMAGE"
+          echo "name=$IMAGE" >> $GITHUB_OUTPUT
 
       - name: Setup Node.js (for checking npm versions)
         uses: actions/setup-node@v4
@@ -90,7 +114,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           tags: |
             type=raw,value=latest,enable=${{ matrix.branch == github.event.repository.default_branch || matrix.branch == 'pi-agent-web-only' }}
             type=raw,value=${{ steps.check_upstream.outputs.combined_version }}
