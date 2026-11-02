@@ -1,11 +1,16 @@
 # Pi Agent Docker (Pi Web UI + VS Code Web)
 
-本项目提供了一个将 **[Pi Coding Agent](https://pi.dev/)** 引擎、**[Pi Web UI](https://github.com/agegr/pi-web)** 前端以及 **code-server (VS Code Web)** 打包在同一容器内的 Docker 化开发环境。支持数据持久化管理与 GitHub Actions 自动构建打包推送至 GitHub Container Registry (GHCR)。
+> 📦 **本 README 属于仓库默认分支 `main`。GHCR 上三个 package 页面都会展示这一份，所以下面先列出镜像与分支的对应关系。**
+>
+> | 镜像 | 对应分支 | 打包内容 |
+> | :--- | :--- | :--- |
+> | `ghcr.io/hhnice510/pi-agent-docker` | `main` | Pi Agent + Pi-Web + code-server (VS Code Web) |
+> | `ghcr.io/hhnice510/pi-agent-web-only` | `pi-agent-web-only` | 仅 Pi Agent + Pi-Web（无 code-server） |
+> | `ghcr.io/hhnice510/pi-agent-pichamber` | `pi-agent-pichamber` | 仅 Pi Agent + Pichamber Web UI |
+>
+> 下文描述的是 **`main` 分支的完整版**（含 code-server）。其它两个分支的细节请切到对应分支查看各自的 README。
 
-> **分支说明**：
-> - `main`（当前分支）：完整版，包含 Pi Agent + Pi-Web + code-server (VS Code Web)。
-> - `pi-agent-web-only`：轻量版，仅包含 Pi Agent + Pi-Web。
-> - `pi-agent-pichamber`：轻量版，仅包含 Pi Agent + Pichamber Web UI。
+本项目提供了一个将 **[Pi Coding Agent](https://pi.dev/)** 引擎、**[Pi Web UI](https://github.com/agegr/pi-web)** 前端以及 **code-server (VS Code Web)** 打包在同一容器内的 Docker 化开发环境。支持数据持久化管理与 GitHub Actions 自动构建打包推送至 GitHub Container Registry (GHCR)。
 
 ---
 
