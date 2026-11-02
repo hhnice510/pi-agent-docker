@@ -16,7 +16,7 @@
 
 - ⚡ **开箱即用**：内置 Node.js 22、Bun (>=1.3)、`@earendil-works/pi-coding-agent` 与 `@amagicpear/pichamber`。
 - 🎨 **Pichamber 面板**：集成 Vue 3 + Bun 的全新轻量级 Pi Agent 交互式 GUI 面板，自带真实终端与状态管理。
-- 🔄 **自动定时构建与更新**：GitHub Actions 每天自动检测 NPM 上游更新（`pi-coding-agent` 和 `pichamber`），有新版本发布即自动构建并推送最新多架构镜像（`linux/amd64`、`linux/arm64`）。
+- 🔄 **自动定时构建与更新**：GitHub Actions 每天 UTC 01:17（北京时间 09:17）自动检测 NPM 上游更新（`@earendil-works/pi-coding-agent` 与 `@amagicpear/pichamber`），有新版本发布即自动构建并推送最新多架构镜像（`linux/amd64`、`linux/arm64`）。
 - 💾 **数据持久化**：宿主机工作区与容器内 `/workspace` 双向同步；配置、会话历史、Git 凭据自动持久化到 Docker Volume。
 - 🌐 **代理友好**：一键打通宿主机代理（Clash / Surge / v2rayA 等）。
 
@@ -111,6 +111,27 @@ docker compose down -v
 | `HTTP_PROXY` | - | HTTP 代理地址（如 `http://host.docker.internal:7890`） |
 | `HTTPS_PROXY` | - | HTTPS 代理地址 |
 | `NO_PROXY` | `localhost,127.0.0.1` | 绕过代理的域名/IP 列表 |
+
+---
+
+## 📦 镜像标签与自动构建 (GHCR)
+
+本分支对应镜像：`ghcr.io/hhnice510/pi-agent-pichamber`。
+
+| 标签 | 含义 |
+| :--- | :--- |
+| `latest` | 最新构建 |
+| `pi-<版本>_pichamber-<版本>` | 如 `pi-1.5.0_pichamber-1.5.4`，只包含本镜像实际安装的两个组件 |
+| `sha-<短提交>` | 对应构建的提交 |
+
+GitHub Actions 工作流（`.github/workflows/docker-publish.yml`）的行为：
+
+1. **定时检测**：每天 UTC 01:17（北京时间 09:17）查询 npm 上 `@earendil-works/pi-coding-agent` 与 `@amagicpear/pichamber` 的最新版本。刻意避开整点，因为 GitHub 在整点负载最高，定时任务可能被延迟甚至丢弃。
+2. **多分支矩阵**：定时任务会同时构建 `main`、`pi-agent-web-only`、`pi-agent-pichamber` 三个分支，各自推送到独立镜像仓库，互不覆盖；其它事件（push / PR / 手动触发）只构建当次触发的分支。
+3. **免重复构建**：缓存 key 由「分支 + 上游版本」组成。上游版本未变且为定时调度时，工作流会在十几秒内跳过构建。
+4. **精准缓存**：版本号作为 `build-arg`（`PI_VERSION` / `PICHAMBER_VERSION`）传入，配合 `type=gha` 层级缓存。上游版本一变，安装层缓存必然失效，不会出现「构建成功但装的还是旧版本」。
+
+> ⚠️ **维护提示**：GitHub 只在仓库**默认分支**上触发 `schedule`。定时逻辑必须保留在默认分支（`main`）的 workflow 中。
 
 ---
 
