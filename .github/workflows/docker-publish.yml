@@ -69,10 +69,20 @@ jobs:
           BRANCH="${{ matrix.branch }}"
           PI_VER=$(npm view @earendil-works/pi-coding-agent version 2>/dev/null || echo "0.0.0")
           echo "pi_version=${PI_VER}" >> $GITHUB_OUTPUT
-          # 每个镜像只追踪自己真正安装的上游包：
-          # main / pi-agent-web-only 装 pi + pi-web；pi-agent-pichamber 装 pi + pichamber。
-          # 这样标签与缓存 key 不会混入无关版本号，pichamber 发版也不会连累 web-only 重建。
+          # 每个镜像只追踪自己真正安装的组件，标签与缓存 key 才不会混入无关版本号：
+          # main = pi + pi-web + code-server；pi-agent-web-only = pi + pi-web；pi-agent-pichamber = pi + pichamber。
           case "$BRANCH" in
+            main)
+              WEB_VER=$(npm view @agegr/pi-web version 2>/dev/null || echo "0.0.0")
+              # code-server 由 Dockerfile 的 ARG 固定版本（不在 npm 上），直接读本分支 Dockerfile，
+              # 改 Dockerfile 里的版本号时标签会跟着变。
+              CS_VER=$(grep -oP '^ARG CODE_SERVER_VERSION=\K.*' Dockerfile 2>/dev/null | head -1)
+              CS_VER=${CS_VER:-none}
+              COMBINED_VER="pi-${PI_VER}_web-${WEB_VER}_code-server-${CS_VER}"
+              echo "web_version=${WEB_VER}" >> $GITHUB_OUTPUT
+              echo "code_server_version=${CS_VER}" >> $GITHUB_OUTPUT
+              echo "Upstream versions for $BRANCH: pi=${PI_VER}, pi-web=${WEB_VER}, code-server=${CS_VER}"
+              ;;
             pi-agent-pichamber)
               PICHAMBER_VER=$(npm view @amagicpear/pichamber version 2>/dev/null || echo "0.0.0")
               COMBINED_VER="pi-${PI_VER}_pichamber-${PICHAMBER_VER}"
