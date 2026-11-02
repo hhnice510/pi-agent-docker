@@ -155,9 +155,9 @@ NO_PROXY=localhost,127.0.0.1
 
 本项目在 `.github/workflows/docker-publish.yml` 中配置了 GitHub Actions 自动化工作流：
 
-1. **定时上游版本检测**：每天 UTC 01:17（北京时间 09:17）查询 npm 上 `@earendil-works/pi-coding-agent`、`@agegr/pi-web`、`@amagicpear/pichamber` 的最新版本号。刻意避开整点，因为 GitHub 在整点负载最高，定时任务可能被延迟甚至丢弃。
+1. **定时上游版本检测**：每天 UTC 01:17（北京时间 09:17）检查上游 npm 版本。每个镜像只追踪自己实际安装的包：`main` 与 `pi-agent-web-only` 看 `@earendil-works/pi-coding-agent` + `@agegr/pi-web`，`pi-agent-pichamber` 看 `@earendil-works/pi-coding-agent` + `@amagicpear/pichamber`。刻意避开整点，因为 GitHub 在整点负载最高，定时任务可能被延迟甚至丢弃。
 2. **多分支矩阵构建**：定时任务会依次构建 `main`、`pi-agent-web-only`、`pi-agent-pichamber` 三个分支，各自推送到独立镜像仓库（`ghcr.io/hhnice510/<分支名>`，`main` 对应 `pi-agent-docker`），互不覆盖。其它事件（push / PR / 手动触发）只构建当次触发的那个分支。
-3. **免重复构建**：缓存 key 由「分支 + 三个上游包版本」组成。若上游版本未变更且为定时调度，工作流会在十几秒内跳过构建，避免在 GHCR 产生冗余镜像。
+3. **免重复构建**：缓存 key 由「分支 + 该镜像安装的上游包版本」组成，镜像标签也按同样规则命名（如 `pi-1.5.0_web-0.14.1`）。若上游版本未变更且为定时调度，工作流会在十几秒内跳过构建，避免在 GHCR 产生冗余镜像。
 4. **精准缓存与多架构极速构建**：将版本号作为 `build-arg` 传入 Docker 构建（`PI_VERSION` / `PI_WEB_VERSION` / `PICHAMBER_VERSION`），并启用 GitHub Actions 层级缓存 (`type=gha`)。基础 Debian 系统等不变层无需重复构建，跨架构（`amd64` + `arm64`）打包速度大幅提升；同时上游版本一变，安装层缓存必然失效，不会出现「构建成功但装的还是旧版本」。
 
 > ⚠️ **维护提示**：GitHub 只在仓库**默认分支**上触发 `schedule`。定时逻辑必须保留在默认分支（`main`）的 workflow 中；只改其它分支的 workflow 文件不会让定时任务生效。
