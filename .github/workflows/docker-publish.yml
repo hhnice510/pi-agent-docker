@@ -57,6 +57,15 @@ jobs:
           IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
           echo "Resolved image for branch '$BRANCH': $IMAGE"
           echo "name=$IMAGE" >> $GITHUB_OUTPUT
+          # 镜像描述按分支写清楚，避免 web-only / pichamber 镜像的描述里也写着 code-server。
+          # （metadata-action 默认会从仓库默认分支的 README 抓取，对多镜像仓库不准确）
+          case "$BRANCH" in
+            main)               DESC="Pi Agent + Pi-Web + code-server (VS Code Web)" ;;
+            pi-agent-web-only)  DESC="Pi Agent + Pi-Web" ;;
+            pi-agent-pichamber) DESC="Pi Agent + Pichamber Web UI" ;;
+            *)                  DESC="Pi Agent Docker image (branch: $BRANCH)" ;;
+          esac
+          echo "description=$DESC" >> $GITHUB_OUTPUT
 
       - name: Setup Node.js (for checking npm versions)
         uses: actions/setup-node@v4
@@ -141,6 +150,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+          labels: |
+            org.opencontainers.image.description=${{ steps.image.outputs.description }}
           # 每个分支推到独立镜像仓库，latest 各自独立，不存在互相覆盖
           tags: |
             type=raw,value=latest

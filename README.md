@@ -9,6 +9,9 @@
 > - `main`：完整版，包含 Pi Agent + Pi-Web + code-server (VS Code Web)。
 > - `pi-agent-web-only`：轻量版，仅包含 Pi Agent + Pi-Web。
 > - `pi-agent-pichamber`（当前分支）：轻量版，仅包含 **Pi Agent + Pichamber Web UI**（基于 Bun 运行时的现代化 Pi Agent 交互面板）。
+>
+> ℹ️ **本文件是 `pi-agent-pichamber` 分支的 README，仅在仓库切到该分支时可见。**
+> GHCR 的 package 页面统一展示仓库默认分支（`main`）的 README，因此 `ghcr.io/hhnice510/pi-agent-pichamber` 的页面会显示完整版的说明，以那里的镜像对照表为准。
 
 ---
 
