@@ -2,6 +2,11 @@
 
 本项目提供了一个将 **[Pi Coding Agent](https://pi.dev/)** 引擎、**[Pi Web UI](https://github.com/agegr/pi-web)** 前端以及 **code-server (VS Code Web)** 打包在同一容器内的 Docker 化开发环境。支持数据持久化管理与 GitHub Actions 自动构建打包推送至 GitHub Container Registry (GHCR)。
 
+> **分支说明**：
+> - `main`（当前分支）：完整版，包含 Pi Agent + Pi-Web + code-server (VS Code Web)。
+> - `pi-agent-web-only`：轻量版，仅包含 Pi Agent + Pi-Web。
+> - `pi-agent-pichamber`：轻量版，仅包含 Pi Agent + Pichamber Web UI。
+
 ---
 
 ## 🌟 核心特性
@@ -17,7 +22,7 @@
   - `pi_data` (`/root/.pi`)：持久化保存模型配置、扩展技能 (Skills)、自定义 Prompt、历史 Session、Git 全局配置（用户名/邮箱/凭证）以及 code-server 配置与扩展（`/root/.pi/code-server`）。
   - `workspace` (`/workspace`)：持久化挂载您的本地代码项目，Pi Web、code-server 与 Pi CLI 共享同一工作区。
 - **轻量进程守护（Supervisord）**：容器以 `supervisord` 作为 PID 1 统一管理 `pi-web` 与 `code-server`，独立运行、异常自动重启（`autorestart`）、优雅退出（SIGTERM）。
-- **智能 CI/CD (GHCR)**：包含 GitHub Actions 工作流，每天定时检测上游 npm 更新，自动构建 `amd64` 与 `arm64` 双架构镜像并推送至 GHCR。
+- **智能 CI/CD (GHCR)**：包含 GitHub Actions 工作流，每天定时检测上游更新，自动构建 `amd64` 与 `arm64` 双架构镜像并推送至 GHCR。
 
 ---
 
@@ -153,11 +158,19 @@ NO_PROXY=localhost,127.0.0.1
 
 ## 🔄 CI/CD 与智能版本检测 (GHCR)
 
-本项目在 `.github/workflows/docker-publish.yml` 中配置了 GitHub Actions 自动化工作流：
+本项目在 `.github/workflows/docker-publish.yml` 中配置了 GitHub Actions 自动化工作流。
 
-1. **定时上游版本检测**：每天 UTC 01:17（北京时间 09:17）检查上游 npm 版本。每个镜像只追踪自己实际安装的包：`main` 与 `pi-agent-web-only` 看 `@earendil-works/pi-coding-agent` + `@agegr/pi-web`，`pi-agent-pichamber` 看 `@earendil-works/pi-coding-agent` + `@amagicpear/pichamber`。刻意避开整点，因为 GitHub 在整点负载最高，定时任务可能被延迟甚至丢弃。
+本分支对应镜像：`ghcr.io/hhnice510/pi-agent-docker`。
+
+| 标签 | 含义 |
+| :--- | :--- |
+| `latest` | 最新构建 |
+| `pi-<版本>_web-<版本>_code-server-<版本>` | 如 `pi-1.5.0_web-0.14.1_code-server-4.133.0`，包含本镜像实际打包的三个组件 |
+| `sha-<短提交>` | 对应构建的提交 |
+
+1. **定时上游版本检测**：每天 UTC 01:17（北京时间 09:17）检查上游版本。每个镜像只追踪自己实际安装的组件：`main` 看 `@earendil-works/pi-coding-agent` + `@agegr/pi-web` + Dockerfile 里的 `CODE_SERVER_VERSION`，`pi-agent-web-only` 看前两者，`pi-agent-pichamber` 看 `@earendil-works/pi-coding-agent` + `@amagicpear/pichamber`。刻意避开整点，因为 GitHub 在整点负载最高，定时任务可能被延迟甚至丢弃。
 2. **多分支矩阵构建**：定时任务会依次构建 `main`、`pi-agent-web-only`、`pi-agent-pichamber` 三个分支，各自推送到独立镜像仓库（`ghcr.io/hhnice510/<分支名>`，`main` 对应 `pi-agent-docker`），互不覆盖。其它事件（push / PR / 手动触发）只构建当次触发的那个分支。
-3. **免重复构建**：缓存 key 由「分支 + 该镜像安装的上游包版本」组成，镜像标签也按同样规则命名（如 `pi-1.5.0_web-0.14.1`）。若上游版本未变更且为定时调度，工作流会在十几秒内跳过构建，避免在 GHCR 产生冗余镜像。
+3. **免重复构建**：缓存 key 由「分支 + 该镜像安装的组件版本」组成，镜像标签也按同样规则命名。若上游版本未变更且为定时调度，工作流会在十几秒内跳过构建，避免在 GHCR 产生冗余镜像。
 4. **精准缓存与多架构极速构建**：将版本号作为 `build-arg` 传入 Docker 构建（`PI_VERSION` / `PI_WEB_VERSION` / `PICHAMBER_VERSION`），并启用 GitHub Actions 层级缓存 (`type=gha`)。基础 Debian 系统等不变层无需重复构建，跨架构（`amd64` + `arm64`）打包速度大幅提升；同时上游版本一变，安装层缓存必然失效，不会出现「构建成功但装的还是旧版本」。
 
 > ⚠️ **维护提示**：GitHub 只在仓库**默认分支**上触发 `schedule`。定时逻辑必须保留在默认分支（`main`）的 workflow 中；只改其它分支的 workflow 文件不会让定时任务生效。
