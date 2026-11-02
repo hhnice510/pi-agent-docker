@@ -117,8 +117,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+          # 每个分支推到独立镜像仓库，latest 各自独立，不存在互相覆盖
           tags: |
-            # 每个分支推到独立镜像仓库，latest 各自独立，不存在互相覆盖
             type=raw,value=latest
             type=raw,value=${{ steps.check_upstream.outputs.combined_version }}
             type=ref,event=tag
