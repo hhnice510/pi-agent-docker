@@ -68,10 +68,14 @@ jobs:
         run: |
           PI_VER=$(npm view @earendil-works/pi-coding-agent version 2>/dev/null || echo "0.0.0")
           WEB_VER=$(npm view @agegr/pi-web version 2>/dev/null || echo "0.0.0")
-          COMBINED_VER="pi-${PI_VER}_web-${WEB_VER}"
-          echo "Upstream versions: pi=${PI_VER}, pi-web=${WEB_VER}"
+          PICHAMBER_VER=$(npm view @amagicpear/pichamber version 2>/dev/null || echo "0.0.0")
+          # combined_version 覆盖所有被定时构建的分支用到的上游包，
+          # 任意一个包发版都会让 cache key 变化，从而触发当天重建。
+          COMBINED_VER="pi-${PI_VER}_web-${WEB_VER}_pichamber-${PICHAMBER_VER}"
+          echo "Upstream versions: pi=${PI_VER}, pi-web=${WEB_VER}, pichamber=${PICHAMBER_VER}"
           echo "pi_version=${PI_VER}" >> $GITHUB_OUTPUT
           echo "web_version=${WEB_VER}" >> $GITHUB_OUTPUT
+          echo "pichamber_version=${PICHAMBER_VER}" >> $GITHUB_OUTPUT
           echo "combined_version=${COMBINED_VER}" >> $GITHUB_OUTPUT
           echo "${COMBINED_VER}" > .last_built_version
 
@@ -135,6 +139,7 @@ jobs:
           build-args: |
             PI_VERSION=${{ steps.check_upstream.outputs.pi_version }}
             PI_WEB_VERSION=${{ steps.check_upstream.outputs.web_version }}
+            PICHAMBER_VERSION=${{ steps.check_upstream.outputs.pichamber_version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: ${{ steps.meta.outputs.tags }}
