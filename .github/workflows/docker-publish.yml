@@ -1,19 +1,21 @@
 name: Build and Push Docker Image to GHCR
 
 on:
+  # 注意：GitHub 只在仓库默认分支(main)上触发 schedule，
+  # 本文件在 pi-agent-web-only 等分支上主要作为 push/dispatch 的构建定义。
   schedule:
-    # 每天 00:00 UTC (北京时间 08:00) 自动检测上游更新
-    - cron: '0 0 * * *'
+    # 每天 UTC 01:17（北京时间 09:17）自动检测上游 npm 更新。
+    # 刻意避开整点：GitHub 在整点负载最高，定时任务会被延迟甚至直接丢弃。
+    - cron: '17 1 * * *'
   push:
-    branches: [ "main", "master", "pi-agent-web-only" ]
-    tags: [ 'v*.*.*' ]
+    branches: [ "main", "master", "pi-agent-web-only", "pi-agent-pichamber" ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: hhnice510/pi-agent-web-only
 
 jobs:
   build-and-push:
@@ -21,10 +23,40 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      # 一个分支构建失败时不要取消其它分支的构建
+      fail-fast: false
+      matrix:
+        # 定时任务(schedule)同时构建 main、pi-agent-web-only 与 pi-agent-pichamber，各自推到各自镜像仓库；
+        # 其它事件(push/pr/dispatch)只构建触发本次运行的那个分支。
+        #
+        # 注意：GitHub Actions 表达式没有 concat()（那是 Azure Pipelines 的函数），
+        # 拼字符串必须用 format()；format 里字面量大括号用 {{ }} 转义。
+        # 之前误用 concat() 导致整个 workflow 在默认分支上解析失败(startup_failure)，
+        # 而 schedule 只读取默认分支的 workflow，于是定时构建彻底停摆。
+        # 这里只保留一层 fromJSON/format；镜像名映射放到 "Resolve image name" 步骤用 bash 算，
+        # 避免多层嵌套表达式再次写错。
+        include: ${{ github.event_name == 'schedule' && fromJSON('[{"branch":"main"},{"branch":"pi-agent-web-only"},{"branch":"pi-agent-pichamber"}]') || fromJSON(format('[{{"branch":"{0}"}}]', github.ref_name)) }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Resolve image name
+        id: image
+        run: |
+          BRANCH="${{ matrix.branch }}"
+          # main / tag / PR 用仓库名；其它发布分支用 <owner>/<branch>，各自独立镜像仓库。
+          if [ "${{ github.ref_type }}" = "tag" ] || [ "${{ github.event_name }}" = "pull_request" ] || [ "$BRANCH" = "main" ]; then
+            IMAGE="${{ github.repository }}"
+          else
+            IMAGE="${{ github.repository_owner }}/$BRANCH"
+          fi
+          IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
+          echo "Resolved image for branch '$BRANCH': $IMAGE"
+          echo "name=$IMAGE" >> $GITHUB_OUTPUT
 
       - name: Setup Node.js (for checking npm versions)
         uses: actions/setup-node@v4
@@ -38,6 +70,8 @@ jobs:
           WEB_VER=$(npm view @agegr/pi-web version 2>/dev/null || echo "0.0.0")
           COMBINED_VER="pi-${PI_VER}_web-${WEB_VER}"
           echo "Upstream versions: pi=${PI_VER}, pi-web=${WEB_VER}"
+          echo "pi_version=${PI_VER}" >> $GITHUB_OUTPUT
+          echo "web_version=${WEB_VER}" >> $GITHUB_OUTPUT
           echo "combined_version=${COMBINED_VER}" >> $GITHUB_OUTPUT
           echo "${COMBINED_VER}" > .last_built_version
 
@@ -46,7 +80,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .last_built_version
-          key: upstream-ver-${{ steps.check_upstream.outputs.combined_version }}
+          # 每个分支(镜像)独立缓存，避免 main 与 pi-agent-web-only 共用 key 导致其中一个被跳过
+          key: upstream-ver-${{ matrix.branch }}-${{ steps.check_upstream.outputs.combined_version }}
 
       - name: Determine if build is required
         id: build_decision
@@ -81,10 +116,12 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/pi-agent-web-only' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            # 每个分支推到独立镜像仓库，latest 各自独立，不存在互相覆盖
+            type=raw,value=latest
             type=raw,value=${{ steps.check_upstream.outputs.combined_version }}
+            type=ref,event=tag
             type=semver,pattern={{version}}
             type=sha,format=short
 
@@ -95,14 +132,18 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PI_VERSION=${{ steps.check_upstream.outputs.pi_version }}
+            PI_WEB_VERSION=${{ steps.check_upstream.outputs.web_version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
       - name: Save built version cache
-        if: steps.build_decision.outputs.should_build == 'true' && github.event_name != 'pull_request'
+        if: steps.build_decision.outputs.should_build == 'true' && github.event_name != 'pull_request' && steps.cache_version.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: .last_built_version
-          key: upstream-ver-${{ steps.check_upstream.outputs.combined_version }}
+          # 每个分支(镜像)独立缓存
+          key: upstream-ver-${{ matrix.branch }}-${{ steps.check_upstream.outputs.combined_version }}

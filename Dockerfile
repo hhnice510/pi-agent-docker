@@ -14,7 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Global installation of Pi Agent CLI and Pi-Web UI
-RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent @agegr/pi-web
+# 版本通过 build-arg 传入：上游版本变化时这一层缓存会自动失效，
+# 否则 cache-from: type=gha 会一直复用旧层，装了旧版本却显示“构建成功”。
+ARG PI_VERSION=latest
+ARG PI_WEB_VERSION=latest
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@${PI_VERSION} @agegr/pi-web@${PI_WEB_VERSION}
 
 # Set environment variables
 ENV NODE_ENV=production
